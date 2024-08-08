@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "HfOcahqeh1w=",
+  "dgSpecHash": "wCK9tV8zD+8=",
   "success": true,
-  "projectFilePath": "/Users/evandolatowski/Documents/C#/Chirpy/Chirpy.csproj",
+  "projectFilePath": "/Users/evandolatowski/Documents/C#/cs-chirpy-server/Chirpy.csproj",
   "expectedPackageFiles": [
     "/Users/evandolatowski/.nuget/packages/microsoft.aspnetcore.openapi/8.0.7/microsoft.aspnetcore.openapi.8.0.7.nupkg.sha512",
     "/Users/evandolatowski/.nuget/packages/microsoft.extensions.apidescription.server/6.0.5/microsoft.extensions.apidescription.server.6.0.5.nupkg.sha512",

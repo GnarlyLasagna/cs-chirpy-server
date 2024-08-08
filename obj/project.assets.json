@@ -465,11 +465,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/Users/evandolatowski/Documents/C#/Chirpy/Chirpy.csproj",
+      "projectUniqueName": "/Users/evandolatowski/Documents/C#/cs-chirpy-server/Chirpy.csproj",
       "projectName": "Chirpy",
-      "projectPath": "/Users/evandolatowski/Documents/C#/Chirpy/Chirpy.csproj",
+      "projectPath": "/Users/evandolatowski/Documents/C#/cs-chirpy-server/Chirpy.csproj",
       "packagesPath": "/Users/evandolatowski/.nuget/packages/",
-      "outputPath": "/Users/evandolatowski/Documents/C#/Chirpy/obj/",
+      "outputPath": "/Users/evandolatowski/Documents/C#/cs-chirpy-server/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/Users/evandolatowski/.nuget/NuGet/NuGet.Config"

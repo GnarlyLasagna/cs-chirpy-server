@@ -1,0 +1,25 @@
+{
+  "Files": [
+    {
+      "Id": "/Users/evandolatowski/Documents/C#/cs-chirpy-server/wwwroot/index.html",
+      "PackagePath": "staticwebassets/index.html"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.Chirpy.Microsoft.AspNetCore.StaticWebAssets.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.build.Chirpy.props",
+      "PackagePath": "build\\Chirpy.props"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.buildMultiTargeting.Chirpy.props",
+      "PackagePath": "buildMultiTargeting\\Chirpy.props"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.buildTransitive.Chirpy.props",
+      "PackagePath": "buildTransitive\\Chirpy.props"
+    }
+  ],
+  "ElementsToRemove": []
+}

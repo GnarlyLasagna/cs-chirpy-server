@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Chirpy")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+13232829c4f3989ca6244f1b450d28ad6ffc73c7")]
 [assembly: System.Reflection.AssemblyProductAttribute("Chirpy")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Chirpy")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

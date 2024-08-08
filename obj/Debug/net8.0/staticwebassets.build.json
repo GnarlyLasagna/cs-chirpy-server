@@ -1,11 +1,39 @@
 {
   "Version": 1,
-  "Hash": "9j6pIWD0ymc3Tn7HKFgHHtqhXTO8n0itfmXuQquRuqo=",
+  "Hash": "DnHAW40buSdWQmmyCUEB8Aah+8+TJaM0CGoQqqIO1W0=",
   "Source": "Chirpy",
   "BasePath": "_content/Chirpy",
   "Mode": "Default",
   "ManifestType": "Build",
   "ReferencedProjectsConfiguration": [],
-  "DiscoveryPatterns": [],
-  "Assets": []
+  "DiscoveryPatterns": [
+    {
+      "Name": "Chirpy/wwwroot",
+      "Source": "Chirpy",
+      "ContentRoot": "/Users/evandolatowski/Documents/C#/cs-chirpy-server/wwwroot/",
+      "BasePath": "_content/Chirpy",
+      "Pattern": "**"
+    }
+  ],
+  "Assets": [
+    {
+      "Identity": "/Users/evandolatowski/Documents/C#/cs-chirpy-server/wwwroot/index.html",
+      "SourceId": "Chirpy",
+      "SourceType": "Discovered",
+      "ContentRoot": "/Users/evandolatowski/Documents/C#/cs-chirpy-server/wwwroot/",
+      "BasePath": "_content/Chirpy",
+      "RelativePath": "index.html",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot/index.html"
+    }
+  ]
 }

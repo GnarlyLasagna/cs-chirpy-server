@@ -1,4 +1,4 @@
-@Chirpy_HostAddress = http://localhost:5234
+@Chirpy_HostAddress = http://localhost:8080
 
 GET {{Chirpy_HostAddress}}/weatherforecast/
 Accept: application/json
