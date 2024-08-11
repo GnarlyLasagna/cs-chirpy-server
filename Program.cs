@@ -32,7 +32,7 @@ app.MapGet("/app/assets", AssetsHandler);
 
 app.MapGet("/api/reset", ResetHandler);
 
-app.MapGet("/api/metrics", MetricsHandler);
+app.MapGet("/admin/metrics", MetricsHandler);
 
 app.MapGet("/api/healthz", WriteOkResponse);
 
@@ -56,8 +56,17 @@ async Task WriteOkResponse(HttpContext context)
 
 async Task MetricsHandler(HttpContext context)
 {
-    context.Response.ContentType = "text/plain; charset=utf-8";
-    await context.Response.WriteAsync($"Hits: {config.FileServerHits}");
+        context.Response.ContentType = "text/html; charset=utf-8";
+    
+    var htmlContent = $@"
+    <html>
+    <body>
+        <h1>Welcome, Chirpy Admin</h1>
+        <p>Chirpy has been visited {config.FileServerHits} times!</p>
+    </body>
+    </html>";
+
+    await context.Response.WriteAsync(htmlContent);
 }
 
 async Task ResetHandler(HttpContext context)

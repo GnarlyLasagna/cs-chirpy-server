@@ -12,7 +12,7 @@ public class RequestCounterMiddleware
     public async Task InvokeAsync(HttpContext context)
     {
         // Increment the counter
-        if (!context.Request.Path.StartsWithSegments("/api/metrics"))
+        if (!context.Request.Path.StartsWithSegments("/admin/metrics"))
         {
         _config.FileServerHits++;
         Console.WriteLine($"Request Count: {_config.FileServerHits}"); // Add this line for debugging
