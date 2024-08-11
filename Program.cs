@@ -28,13 +28,13 @@ app.UseFileServer(new FileServerOptions
 
 app.MapGet("/app", FsHandler);
 
-app.MapGet("/healthz", WriteOkResponse);
-
 app.MapGet("/app/assets", AssetsHandler);
 
-app.MapGet("/reset", ResetHandler);
+app.MapGet("/api/reset", ResetHandler);
 
-app.MapGet("/metrics", MetricsHandler);
+app.MapGet("/api/metrics", MetricsHandler);
+
+app.MapGet("/api/healthz", WriteOkResponse);
 
 app.Run();
 
@@ -93,26 +93,4 @@ async Task AssetsHandler(HttpContext context)
     await context.Response.WriteAsync(html);
 }
 
-public class RequestCounterMiddleware
-{
-    private readonly RequestDelegate _next;
-    private readonly ApiConfig _config;
-
-    public RequestCounterMiddleware(RequestDelegate next, ApiConfig config)
-    {
-        _next = next;
-        _config = config;
-    }
-
-    public async Task InvokeAsync(HttpContext context)
-    {
-        // Increment the counter
-        if (!context.Request.Path.StartsWithSegments("/metrics"))
-        {
-        _config.FileServerHits++;
-        Console.WriteLine($"Request Count: {_config.FileServerHits}"); // Add this line for debugging
-        }
-        await _next(context);
-    }
-}
 
