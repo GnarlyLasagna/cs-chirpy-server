@@ -21,7 +21,6 @@ app.UseStaticFiles();
 // Move the middleware after static files but before route mappings
 app.UseMiddleware<RequestCounterMiddleware>(config);
 
-
 app.UseFileServer(new FileServerOptions
 {
      DefaultFilesOptions = { DefaultFileNames = new List<string> { "index.html" } }
@@ -33,22 +32,13 @@ app.Map("/healthz", WriteOkResponse);
 
 app.MapGet("/app/assets", AssetsHandler);
 
-app.MapGet("/reset", async context =>
-{
-    config.FileServerHits = 0;
-    context.Response.StatusCode = StatusCodes.Status200OK;
-    await context.Response.WriteAsync("File server hits counter reset.");
-});
+app.MapGet("/reset", ResetHandler);
 
-app.MapGet("/metrics", async context =>
-{
-    context.Response.ContentType = "text/plain; charset=utf-8";
-    await context.Response.WriteAsync($"Hits: {config.FileServerHits}");
-});
+app.MapGet("/metrics", MetricsHandler);
 
 app.Run();
 
-
+// Handler Functions //
 async Task FsHandler(HttpContext context)
 {
     context.Response.ContentType = "text/html; charset=utf-8";
@@ -60,6 +50,19 @@ async Task WriteOkResponse(HttpContext context)
     context.Response.Headers.Append("Content-Type", "text/plain; charset=utf-8");
     context.Response.StatusCode = StatusCodes.Status200OK;
     await context.Response.WriteAsync("OK");
+}
+
+async Task MetricsHandler(HttpContext context)
+{
+    context.Response.ContentType = "text/plain; charset=utf-8";
+    await context.Response.WriteAsync($"Hits: {config.FileServerHits}");
+}
+
+async Task ResetHandler(HttpContext context)
+{
+    config.FileServerHits = 0;
+    context.Response.StatusCode = StatusCodes.Status200OK;
+    await context.Response.WriteAsync("File server hits counter reset.");
 }
 
 async Task AssetsHandler(HttpContext context)
@@ -93,18 +96,18 @@ public class ApiConfig
     public int FileServerHits { get; set; }
 }
 
-public class RequestCounterMiddleware
-{
-    private readonly RequestDelegate _next;
-    private readonly ApiConfig _config;
-
-    public RequestCounterMiddleware(RequestDelegate next, ApiConfig config)
+    public class RequestCounterMiddleware
     {
+        private readonly RequestDelegate _next;
+        private readonly ApiConfig _config;
+
+        public RequestCounterMiddleware(RequestDelegate next, ApiConfig config)
+        {
         _next = next;
         _config = config;
     }
 
-    public async Task InvokeAsync(HttpContext context)
+public async Task InvokeAsync(HttpContext context)
     {
         // Increment the counter
         if (!context.Request.Path.StartsWithSegments("/metrics"))
