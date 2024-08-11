@@ -1,6 +1,10 @@
 {
   "Files": [
     {
+      "Id": "/Users/evandolatowski/Documents/C#/cs-chirpy-server/wwwroot/assets/logo.png",
+      "PackagePath": "staticwebassets/assets/logo.png"
+    },
+    {
       "Id": "/Users/evandolatowski/Documents/C#/cs-chirpy-server/wwwroot/index.html",
       "PackagePath": "staticwebassets/index.html"
     },

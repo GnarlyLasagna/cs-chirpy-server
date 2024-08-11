@@ -1,6 +1,6 @@
 {
   "Version": 1,
-  "Hash": "DnHAW40buSdWQmmyCUEB8Aah+8+TJaM0CGoQqqIO1W0=",
+  "Hash": "zhYBMqRYVuE1Kl11ytMhb4rl9dpruhvprAtehuvRTOM=",
   "Source": "Chirpy",
   "BasePath": "_content/Chirpy",
   "Mode": "Default",
@@ -16,6 +16,25 @@
     }
   ],
   "Assets": [
+    {
+      "Identity": "/Users/evandolatowski/Documents/C#/cs-chirpy-server/wwwroot/assets/logo.png",
+      "SourceId": "Chirpy",
+      "SourceType": "Discovered",
+      "ContentRoot": "/Users/evandolatowski/Documents/C#/cs-chirpy-server/wwwroot/",
+      "BasePath": "_content/Chirpy",
+      "RelativePath": "assets/logo.png",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot/assets/logo.png"
+    },
     {
       "Identity": "/Users/evandolatowski/Documents/C#/cs-chirpy-server/wwwroot/index.html",
       "SourceId": "Chirpy",
