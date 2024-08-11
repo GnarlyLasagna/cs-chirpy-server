@@ -21,18 +21,24 @@ app.UseFileServer(new FileServerOptions
      DefaultFilesOptions = { DefaultFileNames = new List<string> { "index.html" } }
 });
 
-app.MapGet("/app", fsHandler);
+app.MapGet("/app", FsHandler);
 
-app.Map("/healthz", (HttpContext context) =>
-{
-    context.Response.Headers.Append("Content-Type", "text/plain; charset=utf-8");
-    context.Response.StatusCode = StatusCodes.Status200OK;
-    return context.Response.WriteAsync("OK");
-});
+app.Map("/healthz", WriteOkResponse);
 
-app.MapGet("/app/assets", async context =>
+app.MapGet("/app/assets", AssetsHandler);
+
+app.Run();
+
+
+async Task FsHandler(HttpContext context)
 {
-    var assetsDir = Path.Combine("wwwroot", "assets");
+    context.Response.ContentType = "text/html; charset=utf-8";
+    await context.Response.SendFileAsync(Path.Combine("wwwroot", "index.html"));
+}
+
+async Task AssetsHandler(HttpContext context)
+{
+        var assetsDir = Path.Combine("wwwroot", "assets");
 
     if (!Directory.Exists(assetsDir))
     {
@@ -54,13 +60,11 @@ app.MapGet("/app/assets", async context =>
     html += "</pre>";
 
     await context.Response.WriteAsync(html);
-});
+}
 
-
-app.Run();
-
-async Task fsHandler(HttpContext context)
+async Task WriteOkResponse(HttpContext context)
 {
-    context.Response.ContentType = "text/html; charset=utf-8";
-    await context.Response.SendFileAsync(Path.Combine("wwwroot", "index.html"));
+    context.Response.Headers.Append("Content-Type", "text/plain; charset=utf-8");
+    context.Response.StatusCode = StatusCodes.Status200OK;
+    await context.Response.WriteAsync("OK");
 }
