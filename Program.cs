@@ -13,9 +13,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-
 // app.UseHttpsRedirection();
-
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseFileServer(new FileServerOptions
@@ -23,11 +21,7 @@ app.UseFileServer(new FileServerOptions
      DefaultFilesOptions = { DefaultFileNames = new List<string> { "index.html" } }
 });
 
-app.MapGet("/app", async context =>
-{
-    context.Response.ContentType = "text/html; charset=utf-8";
-    await context.Response.SendFileAsync(Path.Combine("wwwroot", "index.html"));
-});
+app.MapGet("/app", fsHandler);
 
 app.Map("/healthz", (HttpContext context) =>
 {
@@ -65,3 +59,8 @@ app.MapGet("/app/assets", async context =>
 
 app.Run();
 
+async Task fsHandler(HttpContext context)
+{
+    context.Response.ContentType = "text/html; charset=utf-8";
+    await context.Response.SendFileAsync(Path.Combine("wwwroot", "index.html"));
+}
