@@ -16,7 +16,6 @@ if (app.Environment.IsDevelopment())
 
 // app.UseHttpsRedirection();
 
-
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseFileServer(new FileServerOptions
@@ -24,30 +23,45 @@ app.UseFileServer(new FileServerOptions
      DefaultFilesOptions = { DefaultFileNames = new List<string> { "index.html" } }
 });
 
-var summaries = new[]
+app.MapGet("/app", async context =>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+    context.Response.ContentType = "text/html; charset=utf-8";
+    await context.Response.SendFileAsync(Path.Combine("wwwroot", "index.html"));
+});
 
-// app.MapGet("/", () => "API is working!");
-app.MapGet("/weatherforecast", () =>
+app.Map("/healthz", (HttpContext context) =>
 {
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
+    context.Response.Headers.Append("Content-Type", "text/plain; charset=utf-8");
+    context.Response.StatusCode = StatusCodes.Status200OK;
+    return context.Response.WriteAsync("OK");
+});
+
+app.MapGet("/app/assets", async context =>
+{
+    var assetsDir = Path.Combine("wwwroot", "assets");
+
+    if (!Directory.Exists(assetsDir))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        await context.Response.WriteAsync("Directory not found");
+        return;
+    }
+
+    context.Response.ContentType = "text/html; charset=utf-8";
+
+    var files = Directory.GetFiles(assetsDir)
+                         .Select(Path.GetFileName);
+
+    var html = "<pre>\n";
+    foreach (var file in files)
+    {
+        html += $"<a href=\"{file}\">{file}</a>\n";
+    }
+    html += "</pre>";
+
+    await context.Response.WriteAsync(html);
+});
+
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
