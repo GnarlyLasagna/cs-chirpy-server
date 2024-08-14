@@ -47,6 +47,7 @@ app.MapPost("/api/chirps", HandlerChirpsCreate);
 app.MapGet("/api/chirps", HandlerChirpsRetrieve);
 app.MapGet("/api/chirps/{chirpID:int}", HandlerChirpRetrieveById);
 
+app.MapPost("/api/users", HandlerUsersCreate);
 
 app.Run();
 
@@ -251,6 +252,100 @@ async Task HandlerChirpRetrieveById(HttpContext context)
 }
 
 
+async Task HandlerUsersCreate(HttpContext context)
+{
+    try
+    {
+        // Read the request body
+        var bodyString = await new StreamReader(context.Request.Body).ReadToEndAsync();
+        Console.WriteLine("Raw Body: " + bodyString);
+
+        // Deserialize the body string into UserRequest
+        var userRequest = System.Text.Json.JsonSerializer.Deserialize<UserRequest>(bodyString);
+
+        if (userRequest == null || string.IsNullOrEmpty(userRequest.Email))
+        {
+            Console.WriteLine("User request is null or email is empty");
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsJsonAsync(new { error = "Invalid user data" });
+            return;
+        }
+
+        // Create the user and save to the database
+        var user = await CreateUserAsync(userRequest.Email);
+
+        if (user == null)
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsJsonAsync(new { error = "Couldn't create user" });
+            return;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status201Created;
+        await context.Response.WriteAsJsonAsync(new { id = user.ID, email = user.Email });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Exception: {ex}");
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong" });
+    }
+}
+
+async Task<User?> CreateUserAsync(string email)
+{
+    var dbData = await GetDatabaseAsync();
+    var users = dbData.Users;
+
+    var newUserId = users.Any() ? users.Max(u => u.ID) + 1 : 1;
+    var newUser = new User { ID = newUserId, Email = email };
+
+    users.Add(newUser);
+    dbData.Users = users;
+
+    try
+    {
+        await SaveDatabaseAsync(dbData);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error saving user: {ex.Message}");
+        return null;
+    }
+
+    return newUser;
+}
+
+async Task<Database> GetDatabaseAsync()
+{
+    var dbData = new Database();
+
+    try
+    {
+        var jsonData = await File.ReadAllTextAsync("database.json");
+        dbData = System.Text.Json.JsonSerializer.Deserialize<Database>(jsonData) ?? new Database();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error reading database: {ex.Message}");
+    }
+
+    return dbData;
+}
+
+async Task SaveDatabaseAsync(Database dbData)
+{
+    try
+    {
+        var jsonData = System.Text.Json.JsonSerializer.Serialize(dbData);
+        await File.WriteAllTextAsync("database.json", jsonData);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error saving database: {ex.Message}");
+    }
+}
+
 async Task<List<Chirp>> GetChirpsAsync()
 {
     var chirps = new List<Chirp>();
@@ -302,4 +397,23 @@ public class ChirpRequest
     [JsonPropertyName("body")]
     public string? Body { get; set; }
 }
+class Database
+{
+    public List<Chirp> Chirps { get; set; } = new List<Chirp>();
+    public List<User> Users { get; set; } = new List<User>();
+}
+
+class UserRequest
+{
+    [JsonPropertyName("email")]
+    public string? Email { get; set; }
+}
+
+
+class User
+{
+    public int? ID { get; set; }
+    public string? Email { get; set; }
+}
+
 
