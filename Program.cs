@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -42,7 +43,8 @@ app.MapGet("/admin/metrics", MetricsHandler);
 app.MapGet("/api/reset", ResetHandler);
 app.MapGet("/api/healthz", WriteOkResponse);
 
-app.MapPost("/api/validate_chirp", ValidateChirp);
+app.MapPost("/api/chirps", HandlerChirpsCreate);
+app.MapGet("/api/chirps", HandlerChirpsRetrieve);
 
 app.Run();
 
@@ -107,61 +109,153 @@ async Task AssetsHandler(HttpContext context)
     await context.Response.WriteAsync(html);
 }
 
-async Task ValidateChirp(HttpContext context)
+async Task HandlerChirpsCreate(HttpContext context)
 {
     try
     {
-        // Read the request body as a string
+        // Read the request body
         var bodyString = await new StreamReader(context.Request.Body).ReadToEndAsync();
         Console.WriteLine("Raw Body: " + bodyString);
 
-        // Deserialize the body string into ChirpRequest using System.Text.Json.JsonSerializer
+        // Deserialize the body string into ChirpRequest
         var chirpRequest = System.Text.Json.JsonSerializer.Deserialize<ChirpRequest>(bodyString);
-
-        Console.WriteLine("Deserialized ChirpRequest: " + (chirpRequest?.Body ?? "null"));
 
         if (chirpRequest == null || string.IsNullOrEmpty(chirpRequest.Body))
         {
-            Console.WriteLine("chirp request is == null or chirp body is empty");
+            Console.WriteLine("Chirp request is null or body is empty");
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsJsonAsync(new { error = "Invalid chirp data" });
             return;
         }
 
-        if (chirpRequest.Body.Length > 140)
+        // Validate the chirp
+        var cleanedBody = ValidateChirp(chirpRequest.Body, out string error);
+        if (error != null)
         {
-            Console.WriteLine("chirp length is over 140 ");
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsJsonAsync(new { error = "Chirp is too long" });
+            await context.Response.WriteAsJsonAsync(new { error });
             return;
         }
 
-        var cleanedBody = CleanProfanity(chirpRequest.Body);
+        // Create the chirp and save to the database
+        var chirp = await CreateChirpAsync(cleanedBody);
 
-        context.Response.StatusCode = StatusCodes.Status200OK;
-        await context.Response.WriteAsJsonAsync(new { cleaned_body = cleanedBody });
+        context.Response.StatusCode = StatusCodes.Status201Created;
+        await context.Response.WriteAsJsonAsync(new { id = chirp.ID, body = chirp.Body });
     }
     catch (Exception ex)
     {
-        // Log exception message
         Console.WriteLine($"Exception: {ex}");
-
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         await context.Response.WriteAsJsonAsync(new { error = "Something went wrong" });
     }
 }
 
-string CleanProfanity(string input)
+string ValidateChirp(string body, out string error)
 {
-    var profaneWords = new List<string> { "kerfuffle", "sharbert", "fornax" };
+    const int MaxChirpLength = 140;
+    error = null;
 
-    foreach (var word in profaneWords)
+    if (body.Length > MaxChirpLength)
     {
-        var regex = new Regex($@"\b{word}\b", RegexOptions.IgnoreCase);
-        input = regex.Replace(input, "****");
+        error = "Chirp is too long";
+        return null;
     }
 
-    return input;
+    var profaneWords = new HashSet<string> { "kerfuffle", "sharbert", "fornax" };
+    var cleanedBody = CleanProfanity(body, profaneWords);
+    return cleanedBody;
 }
 
+string CleanProfanity(string input, HashSet<string> badWords)
+{
+    var words = input.Split(' ');
+    for (int i = 0; i < words.Length; i++)
+    {
+        if (badWords.Contains(words[i].ToLower()))
+        {
+            words[i] = "****";
+        }
+    }
+    return string.Join(" ", words);
+}
+
+async Task HandlerChirpsRetrieve(HttpContext context)
+{
+    try
+    {
+        // Retrieve chirps from database.json
+        var dbChirps = await GetChirpsAsync();
+
+        if (dbChirps == null)
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsJsonAsync(new { error = "Couldn't retrieve chirps" });
+            return;
+        }
+
+        // Sort the chirps by ID
+        var sortedChirps = dbChirps.OrderBy(c => c.ID).ToList();
+
+        // Respond with the sorted chirps as JSON
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        await context.Response.WriteAsJsonAsync(sortedChirps);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Exception: {ex}");
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong" });
+    }
+}
+
+async Task<List<Chirp>> GetChirpsAsync()
+{
+    var chirps = new List<Chirp>();
+
+    try
+    {
+        var jsonData = await File.ReadAllTextAsync("database.json");
+        chirps = System.Text.Json.JsonSerializer.Deserialize<List<Chirp>>(jsonData) ?? new List<Chirp>();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error reading chirps: {ex.Message}");
+    }
+
+    return chirps;
+}
+
+async Task<Chirp> CreateChirpAsync(string body)
+{
+    var chirps = await GetChirpsAsync();
+    var newChirpId = chirps.Any() ? chirps.Max(c => c.ID) + 1 : 1;
+    var newChirp = new Chirp { ID = newChirpId, Body = body };
+
+    chirps.Add(newChirp);
+
+    try
+    {
+        var jsonData = System.Text.Json.JsonSerializer.Serialize(chirps);
+        await File.WriteAllTextAsync("database.json", jsonData);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error saving chirp: {ex.Message}");
+    }
+
+    return newChirp;
+}
+
+class Chirp
+{
+    public int ID { get; set; }
+    public string Body { get; set; }
+}
+
+public class ChirpRequest
+{
+    [JsonPropertyName("body")]
+    public string? Body { get; set; }
+}
 
