@@ -38,68 +38,13 @@ app.UseFileServer(new FileServerOptions
 
 app.MapGet("/app", FsHandler);
 app.MapGet("/app/assets", AssetsHandler);
-app.MapGet("/api/reset", ResetHandler);
 app.MapGet("/admin/metrics", MetricsHandler);
+app.MapGet("/api/reset", ResetHandler);
 app.MapGet("/api/healthz", WriteOkResponse);
 
-app.MapPost("/api/validate_chirp", async (HttpContext context) =>
-{
-    try
-    {
-        // Read the request body as a string
-        var bodyString = await new StreamReader(context.Request.Body).ReadToEndAsync();
-        Console.WriteLine("Raw Body: " + bodyString);
-
-        // Deserialize the body string into ChirpRequest using System.Text.Json.JsonSerializer
-        var chirpRequest = System.Text.Json.JsonSerializer.Deserialize<ChirpRequest>(bodyString);
-
-        Console.WriteLine("Deserialized ChirpRequest: " + (chirpRequest?.Body ?? "null"));
-
-        if (chirpRequest == null || string.IsNullOrEmpty(chirpRequest.Body))
-        {
-            Console.WriteLine("chirp request is == null or chirp body is empty");
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsJsonAsync(new { error = "Invalid chirp data" });
-            return;
-        }
-
-        if (chirpRequest.Body.Length > 140)
-        {
-            Console.WriteLine("chirp length is over 140 ");
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsJsonAsync(new { error = "Chirp is too long" });
-            return;
-        }
-
-        var cleanedBody = CleanProfanity(chirpRequest.Body);
-
-        context.Response.StatusCode = StatusCodes.Status200OK;
-        await context.Response.WriteAsJsonAsync(new { cleaned_body = cleanedBody });
-    }
-    catch (Exception ex)
-    {
-        // Log exception message
-        Console.WriteLine($"Exception: {ex}");
-
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong" });
-    }
-});
+app.MapPost("/api/validate_chirp", ValidateChirp);
 
 app.Run();
-
-string CleanProfanity(string input)
-{
-    var profaneWords = new List<string> { "kerfuffle", "sharbert", "fornax" };
-
-    foreach (var word in profaneWords)
-    {
-        var regex = new Regex($@"\b{word}\b", RegexOptions.IgnoreCase);
-        input = regex.Replace(input, "****");
-    }
-
-    return input;
-}
 
 async Task FsHandler(HttpContext context)
 {
@@ -161,4 +106,62 @@ async Task AssetsHandler(HttpContext context)
 
     await context.Response.WriteAsync(html);
 }
+
+async Task ValidateChirp(HttpContext context)
+{
+    try
+    {
+        // Read the request body as a string
+        var bodyString = await new StreamReader(context.Request.Body).ReadToEndAsync();
+        Console.WriteLine("Raw Body: " + bodyString);
+
+        // Deserialize the body string into ChirpRequest using System.Text.Json.JsonSerializer
+        var chirpRequest = System.Text.Json.JsonSerializer.Deserialize<ChirpRequest>(bodyString);
+
+        Console.WriteLine("Deserialized ChirpRequest: " + (chirpRequest?.Body ?? "null"));
+
+        if (chirpRequest == null || string.IsNullOrEmpty(chirpRequest.Body))
+        {
+            Console.WriteLine("chirp request is == null or chirp body is empty");
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsJsonAsync(new { error = "Invalid chirp data" });
+            return;
+        }
+
+        if (chirpRequest.Body.Length > 140)
+        {
+            Console.WriteLine("chirp length is over 140 ");
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsJsonAsync(new { error = "Chirp is too long" });
+            return;
+        }
+
+        var cleanedBody = CleanProfanity(chirpRequest.Body);
+
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        await context.Response.WriteAsJsonAsync(new { cleaned_body = cleanedBody });
+    }
+    catch (Exception ex)
+    {
+        // Log exception message
+        Console.WriteLine($"Exception: {ex}");
+
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong" });
+    }
+}
+
+string CleanProfanity(string input)
+{
+    var profaneWords = new List<string> { "kerfuffle", "sharbert", "fornax" };
+
+    foreach (var word in profaneWords)
+    {
+        var regex = new Regex($@"\b{word}\b", RegexOptions.IgnoreCase);
+        input = regex.Replace(input, "****");
+    }
+
+    return input;
+}
+
 

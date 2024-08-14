@@ -67,3 +67,4 @@
 /Users/evandolatowski/Documents/C#/cs-chirpy-server/obj/Debug/net8.0/ref/Chirpy.dll
 /Users/evandolatowski/Documents/C#/cs-chirpy-server/bin/Debug/net8.0/Chirpy.staticwebassets.runtime.json
 /Users/evandolatowski/Documents/C#/cs-chirpy-server/bin/Debug/net8.0/Newtonsoft.Json.dll
+/Users/evandolatowski/Documents/C#/cs-chirpy-server/bin/Debug/net8.0/database.json
