@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Builder;
@@ -48,6 +50,7 @@ app.MapGet("/api/chirps", HandlerChirpsRetrieve);
 app.MapGet("/api/chirps/{chirpID:int}", HandlerChirpRetrieveById);
 
 app.MapPost("/api/users", HandlerUsersCreate);
+app.MapPost("/api/login", HandlerLogin);
 
 app.Run();
 
@@ -111,6 +114,60 @@ async Task AssetsHandler(HttpContext context)
 
     await context.Response.WriteAsync(html);
 }
+
+async Task HandlerLogin(HttpContext context)
+{
+    try
+    {
+        var bodyString = await new StreamReader(context.Request.Body).ReadToEndAsync();
+        Console.WriteLine("Raw Body: " + bodyString);
+
+        var loginRequest = System.Text.Json.JsonSerializer.Deserialize<LoginRequest>(bodyString);
+
+        if (loginRequest == null || string.IsNullOrEmpty(loginRequest.Email) || string.IsNullOrEmpty(loginRequest.Password))
+        {
+            Console.WriteLine("Login request is invalid");
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsJsonAsync(new { error = "Invalid login data" });
+            return;
+        }
+
+        var user = await AuthenticateUserAsync(loginRequest.Email, loginRequest.Password);
+
+        if (user == null)
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(new { error = "Invalid email or password" });
+            return;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        await context.Response.WriteAsJsonAsync(new { id = user.ID, email = user.Email });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Exception: {ex}");
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong" });
+    }
+}
+
+
+async Task<User?> AuthenticateUserAsync(string email, string password)
+{
+    var dbData = await GetDatabaseAsync();
+    var user = dbData.Users.FirstOrDefault(u => u.Email == email);
+
+    if (user == null)
+    {
+        return null; // User not found
+    }
+
+    // Check the password
+    var isPasswordValid = HashPassword(password, user.PasswordHash) != null;
+    return isPasswordValid ? user : null;
+}
+
 
 async Task HandlerChirpsCreate(HttpContext context)
 {
@@ -251,28 +308,27 @@ async Task HandlerChirpRetrieveById(HttpContext context)
     }
 }
 
-
 async Task HandlerUsersCreate(HttpContext context)
 {
     try
     {
-        // Read the request body
         var bodyString = await new StreamReader(context.Request.Body).ReadToEndAsync();
         Console.WriteLine("Raw Body: " + bodyString);
 
-        // Deserialize the body string into UserRequest
         var userRequest = System.Text.Json.JsonSerializer.Deserialize<UserRequest>(bodyString);
 
-        if (userRequest == null || string.IsNullOrEmpty(userRequest.Email))
+        if (userRequest == null || string.IsNullOrEmpty(userRequest.Email) || string.IsNullOrEmpty(userRequest.Password))
         {
-            Console.WriteLine("User request is null or email is empty");
+            Console.WriteLine("User request is invalid");
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsJsonAsync(new { error = "Invalid user data" });
             return;
         }
 
-        // Create the user and save to the database
-        var user = await CreateUserAsync(userRequest.Email);
+        // Hash the password
+        var passwordHash = HashPassword(userRequest.Password);
+
+        var user = await CreateUserAsync(userRequest.Email, passwordHash);
 
         if (user == null)
         {
@@ -292,13 +348,13 @@ async Task HandlerUsersCreate(HttpContext context)
     }
 }
 
-async Task<User?> CreateUserAsync(string email)
+async Task<User?> CreateUserAsync(string email, string passwordHash)
 {
     var dbData = await GetDatabaseAsync();
     var users = dbData.Users;
 
     var newUserId = users.Any() ? users.Max(u => u.ID) + 1 : 1;
-    var newUser = new User { ID = newUserId, Email = email };
+    var newUser = new User { ID = newUserId, Email = email, PasswordHash = passwordHash };
 
     users.Add(newUser);
     dbData.Users = users;
@@ -315,6 +371,52 @@ async Task<User?> CreateUserAsync(string email)
 
     return newUser;
 }
+
+
+string HashPassword(string password, string? storedHash = null)
+{
+    if (storedHash == null)
+    {
+        // Hash new password
+        var salt = new byte[16];
+        using (var rng = RandomNumberGenerator.Create())
+        {
+            rng.GetBytes(salt);
+        }
+
+        var hash = KeyDerivation.Pbkdf2(
+            password: password,
+            salt: salt,
+            prf: KeyDerivationPrf.HMACSHA256,
+            iterationCount: 10000,
+            numBytesRequested: 32
+        );
+
+        var hashBytes = new byte[48];
+        Array.Copy(salt, 0, hashBytes, 0, 16);
+        Array.Copy(hash, 0, hashBytes, 16, 32);
+
+        return Convert.ToBase64String(hashBytes);
+    }
+    else
+    {
+        // Verify password
+        var hashBytes = Convert.FromBase64String(storedHash);
+        var salt = hashBytes.Take(16).ToArray();
+        var storedHashBytes = hashBytes.Skip(16).ToArray();
+
+        var hash = KeyDerivation.Pbkdf2(
+            password: password,
+            salt: salt,
+            prf: KeyDerivationPrf.HMACSHA256,
+            iterationCount: 10000,
+            numBytesRequested: 32
+        );
+
+        return hash.SequenceEqual(storedHashBytes) ? storedHash : null;
+    }
+}
+
 
 async Task<Database> GetDatabaseAsync()
 {
@@ -403,17 +505,30 @@ class Database
     public List<User> Users { get; set; } = new List<User>();
 }
 
-class UserRequest
-{
-    [JsonPropertyName("email")]
-    public string? Email { get; set; }
-}
 
 
 class User
 {
     public int? ID { get; set; }
     public string? Email { get; set; }
+    public string? PasswordHash { get; set; } // Store the hashed password
 }
 
+class LoginRequest
+{
+    [JsonPropertyName("email")]
+    public string? Email { get; set; }
+
+    [JsonPropertyName("password")]
+    public string? Password { get; set; }
+}
+
+class UserRequest
+{
+    [JsonPropertyName("email")]
+    public string? Email { get; set; }
+
+    [JsonPropertyName("password")]
+    public string? Password { get; set; } // Add this property
+}
 
