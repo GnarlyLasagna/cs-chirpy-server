@@ -45,6 +45,8 @@ app.MapGet("/api/healthz", WriteOkResponse);
 
 app.MapPost("/api/chirps", HandlerChirpsCreate);
 app.MapGet("/api/chirps", HandlerChirpsRetrieve);
+app.MapGet("/api/chirps/{chirpID:int}", HandlerChirpRetrieveById);
+
 
 app.Run();
 
@@ -129,7 +131,10 @@ async Task HandlerChirpsCreate(HttpContext context)
         }
 
         // Validate the chirp
-        var cleanedBody = ValidateChirp(chirpRequest.Body, out string error);
+        if (chirpRequest?.Body != null)
+        {
+            var cleanedBody = ValidateChirp(chirpRequest.Body, out string error);
+
         if (error != null)
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -142,6 +147,7 @@ async Task HandlerChirpsCreate(HttpContext context)
 
         context.Response.StatusCode = StatusCodes.Status201Created;
         await context.Response.WriteAsJsonAsync(new { id = chirp.ID, body = chirp.Body });
+    }
     }
     catch (Exception ex)
     {
@@ -209,6 +215,42 @@ async Task HandlerChirpsRetrieve(HttpContext context)
     }
 }
 
+async Task HandlerChirpRetrieveById(HttpContext context)
+{
+    try
+    {
+        // Extract chirpID from route
+        if (!context.Request.RouteValues.TryGetValue("chirpID", out var chirpIdObj) || 
+            !int.TryParse(chirpIdObj.ToString(), out int chirpId))
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsJsonAsync(new { error = "Invalid chirp ID" });
+            return;
+        }
+
+        // Retrieve chirps from database.json
+        var chirps = await GetChirpsAsync();
+        var chirp = chirps.FirstOrDefault(c => c.ID == chirpId);
+
+        if (chirp == null)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            await context.Response.WriteAsJsonAsync(new { error = "Chirp not found" });
+            return;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        await context.Response.WriteAsJsonAsync(chirp);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Exception: {ex}");
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong" });
+    }
+}
+
+
 async Task<List<Chirp>> GetChirpsAsync()
 {
     var chirps = new List<Chirp>();
@@ -221,12 +263,13 @@ async Task<List<Chirp>> GetChirpsAsync()
     catch (Exception ex)
     {
         Console.WriteLine($"Error reading chirps: {ex.Message}");
+        return new List<Chirp>(); // Return an empty list instead of null
     }
 
     return chirps;
 }
 
-async Task<Chirp> CreateChirpAsync(string body)
+async Task<Chirp?> CreateChirpAsync(string body)
 {
     var chirps = await GetChirpsAsync();
     var newChirpId = chirps.Any() ? chirps.Max(c => c.ID) + 1 : 1;
@@ -242,6 +285,7 @@ async Task<Chirp> CreateChirpAsync(string body)
     catch (Exception ex)
     {
         Console.WriteLine($"Error saving chirp: {ex.Message}");
+        return null; // It's okay to return null if the return type is nullable
     }
 
     return newChirp;
@@ -249,8 +293,8 @@ async Task<Chirp> CreateChirpAsync(string body)
 
 class Chirp
 {
-    public int ID { get; set; }
-    public string Body { get; set; }
+    public int? ID { get; set; }
+    public string? Body { get; set; }
 }
 
 public class ChirpRequest
