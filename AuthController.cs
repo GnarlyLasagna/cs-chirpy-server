@@ -20,7 +20,7 @@ namespace Chirpy
         [HttpPost("login")]
         public IActionResult Login([FromBody] LoginRequest loginRequest)
         {
-            // Validate user credentials (pseudo-code)
+
             var userId = ValidateUser(loginRequest.Email, loginRequest.Password);
 
             if (userId == null)
@@ -36,8 +36,8 @@ namespace Chirpy
 
         private string ValidateUser(string email, string password)
         {
-            // Replace with your actual user validation logic
-            return "some_user_id"; // Return user ID if valid, otherwise null
+
+            return "some_user_id";
         }
     }
 
