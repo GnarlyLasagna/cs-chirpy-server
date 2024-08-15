@@ -174,7 +174,10 @@ async Task HandlerLogin(HttpContext context)
             return;
         }
 
-        var expirationTime = TimeSpan.FromHours(24);
+        var expirationTime = loginRequest.ExpiresInSeconds.HasValue 
+            ? TimeSpan.FromSeconds(loginRequest.ExpiresInSeconds.Value) 
+            : TimeSpan.FromHours(24); // Default to 24 hours if no expiration is provided
+
         var tokenHandler = new JwtSecurityTokenHandler();
         var key = Encoding.ASCII.GetBytes(jwtSecret);
         var tokenDescriptor = new SecurityTokenDescriptor
@@ -188,25 +191,25 @@ async Task HandlerLogin(HttpContext context)
             Expires = DateTime.UtcNow.Add(expirationTime),
             SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
         };
+
         var token = tokenHandler.CreateToken(tokenDescriptor);
         var tokenString = tokenHandler.WriteToken(token);
 
         // Save the token in the user's object
         user.Token = tokenString;
-        
-        // Save the updated user in the database
         var db = await GetDatabaseAsync();
-        var userIndex = db.Users.FindIndex(u => u.ID == user.ID);
-        if (userIndex >= 0)
+        var userToUpdate = db.Users.FirstOrDefault(u => u.ID == user.ID);
+        if (userToUpdate != null)
         {
-            db.Users[userIndex] = user;
+            userToUpdate.Token = tokenString;
+            await SaveDatabaseAsync(db);
         }
         else
         {
-            db.Users.Add(user);
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsJsonAsync(new { error = "User not found in the database" });
+            return;
         }
-        
-        await SaveDatabaseAsync(db);
 
         context.Response.StatusCode = StatusCodes.Status200OK;
         await context.Response.WriteAsJsonAsync(new { id = user.ID, email = user.Email, token = tokenString });
@@ -584,12 +587,12 @@ public class LoginRequest
     [JsonPropertyName("password")]
     public string Password { get; set; }
 
-    public int? ExpiresInSeconds { get; set; } = 0;
+    [JsonPropertyName("expires_in_seconds")]
+    public int? ExpiresInSeconds { get; set; } = 3600;
 }
 
 public class User
 {
-    
     public int ID { get; set; }
 
     [JsonPropertyName("email")]
