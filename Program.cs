@@ -1,8 +1,12 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Security.Claims;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Text;
 using System.Text.Json;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,7 +17,25 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 
+var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? string.Empty;
+var tokenHandler = new JwtSecurityTokenHandler();
+var key = Encoding.ASCII.GetBytes(jwtSecret);
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllers();
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(key),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ClockSkew = TimeSpan.Zero
+        };
+    });
 
 builder.Services.AddSingleton<ApiConfig>();
 builder.Services.AddEndpointsApiExplorer();
@@ -21,6 +43,10 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers();
 var config = app.Services.GetRequiredService<ApiConfig>();
 
 if (app.Environment.IsDevelopment())
@@ -31,7 +57,6 @@ if (app.Environment.IsDevelopment())
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
-
 app.UseMiddleware<RequestCounterMiddleware>(config);
 
 app.UseFileServer(new FileServerOptions
@@ -39,6 +64,7 @@ app.UseFileServer(new FileServerOptions
     DefaultFilesOptions = { DefaultFileNames = new List<string> { "index.html" } }
 });
 
+// Route Handlers
 app.MapGet("/app", FsHandler);
 app.MapGet("/app/assets", AssetsHandler);
 app.MapGet("/admin/metrics", MetricsHandler);
@@ -51,8 +77,11 @@ app.MapGet("/api/chirps/{chirpID:int}", HandlerChirpRetrieveById);
 
 app.MapPost("/api/users", HandlerUsersCreate);
 app.MapPost("/api/login", HandlerLogin);
+app.MapPut("/api/users", HandlerUsersUpdate);
 
 app.Run();
+
+
 
 async Task FsHandler(HttpContext context)
 {
@@ -120,20 +149,16 @@ async Task HandlerLogin(HttpContext context)
     try
     {
         var bodyString = await new StreamReader(context.Request.Body).ReadToEndAsync();
-        Console.WriteLine("Raw Body: " + bodyString);
-
-        var loginRequest = System.Text.Json.JsonSerializer.Deserialize<LoginRequest>(bodyString);
+        var loginRequest = JsonSerializer.Deserialize<LoginRequest>(bodyString);
 
         if (loginRequest == null || string.IsNullOrEmpty(loginRequest.Email) || string.IsNullOrEmpty(loginRequest.Password))
         {
-            Console.WriteLine("Login request is invalid");
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsJsonAsync(new { error = "Invalid login data" });
             return;
         }
 
         var user = await AuthenticateUserAsync(loginRequest.Email, loginRequest.Password);
-
         if (user == null)
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -141,17 +166,57 @@ async Task HandlerLogin(HttpContext context)
             return;
         }
 
+        var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET");
+        if (string.IsNullOrEmpty(jwtSecret))
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsJsonAsync(new { error = "JWT secret is not configured" });
+            return;
+        }
+
+        var expirationTime = TimeSpan.FromHours(24);
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var key = Encoding.ASCII.GetBytes(jwtSecret);
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity(new Claim[]
+            {
+                new Claim(JwtRegisteredClaimNames.Sub, user.ID.ToString()),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            }),
+            Expires = DateTime.UtcNow.Add(expirationTime),
+            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+        };
+        var token = tokenHandler.CreateToken(tokenDescriptor);
+        var tokenString = tokenHandler.WriteToken(token);
+
+        // Save the token in the user's object
+        user.Token = tokenString;
+        
+        // Save the updated user in the database
+        var db = await GetDatabaseAsync();
+        var userIndex = db.Users.FindIndex(u => u.ID == user.ID);
+        if (userIndex >= 0)
+        {
+            db.Users[userIndex] = user;
+        }
+        else
+        {
+            db.Users.Add(user);
+        }
+        
+        await SaveDatabaseAsync(db);
+
         context.Response.StatusCode = StatusCodes.Status200OK;
-        await context.Response.WriteAsJsonAsync(new { id = user.ID, email = user.Email });
+        await context.Response.WriteAsJsonAsync(new { id = user.ID, email = user.Email, token = tokenString });
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Exception: {ex}");
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong" });
+        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong", details = ex.Message });
     }
 }
-
 
 async Task<User?> AuthenticateUserAsync(string email, string password)
 {
@@ -164,10 +229,9 @@ async Task<User?> AuthenticateUserAsync(string email, string password)
     }
 
     // Check the password
-    var isPasswordValid = HashPassword(password, user.PasswordHash) != null;
+    var isPasswordValid = HashPassword(password, user.Password) != null;
     return isPasswordValid ? user : null;
 }
-
 
 async Task HandlerChirpsCreate(HttpContext context)
 {
@@ -193,19 +257,19 @@ async Task HandlerChirpsCreate(HttpContext context)
         {
             var cleanedBody = ValidateChirp(chirpRequest.Body, out string error);
 
-        if (error != null)
-        {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsJsonAsync(new { error });
-            return;
+            if (error != null)
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsJsonAsync(new { error });
+                return;
+            }
+
+            // Create the chirp and save to the database
+            var chirp = await CreateChirpAsync(cleanedBody);
+
+            context.Response.StatusCode = StatusCodes.Status201Created;
+            await context.Response.WriteAsJsonAsync(new { id = chirp.ID, body = chirp.Body });
         }
-
-        // Create the chirp and save to the database
-        var chirp = await CreateChirpAsync(cleanedBody);
-
-        context.Response.StatusCode = StatusCodes.Status201Created;
-        await context.Response.WriteAsJsonAsync(new { id = chirp.ID, body = chirp.Body });
-    }
     }
     catch (Exception ex)
     {
@@ -279,16 +343,16 @@ async Task HandlerChirpRetrieveById(HttpContext context)
     {
         // Extract chirpID from route
         if (!context.Request.RouteValues.TryGetValue("chirpID", out var chirpIdObj) || 
-            !int.TryParse(chirpIdObj.ToString(), out int chirpId))
+            !int.TryParse(chirpIdObj.ToString(), out var chirpID))
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsJsonAsync(new { error = "Invalid chirp ID" });
             return;
         }
 
-        // Retrieve chirps from database.json
-        var chirps = await GetChirpsAsync();
-        var chirp = chirps.FirstOrDefault(c => c.ID == chirpId);
+        // Retrieve the chirp by ID
+        var dbChirps = await GetChirpsAsync();
+        var chirp = dbChirps.FirstOrDefault(c => c.ID == chirpID);
 
         if (chirp == null)
         {
@@ -297,14 +361,78 @@ async Task HandlerChirpRetrieveById(HttpContext context)
             return;
         }
 
+        // Respond with the chirp as JSON
         context.Response.StatusCode = StatusCodes.Status200OK;
         await context.Response.WriteAsJsonAsync(chirp);
     }
     catch (Exception ex)
     {
         Console.WriteLine($"Exception: {ex}");
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        // context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         await context.Response.WriteAsJsonAsync(new { error = "Something went wrong" });
+    }
+}
+
+async Task HandlerUsersUpdate(HttpContext context)
+{
+    try
+    {
+        var token = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+
+        var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET");
+        var tokenHandler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+        var key = Encoding.ASCII.GetBytes(jwtSecret);
+
+        tokenHandler.ValidateToken(token, new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(key),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ClockSkew = TimeSpan.Zero
+        }, out SecurityToken validatedToken);
+
+        var jwtToken = (JwtSecurityToken)validatedToken;
+        var userId = int.Parse(jwtToken.Claims.First(x => x.Type == JwtRegisteredClaimNames.Sub).Value);
+
+        var db = await GetDatabaseAsync();
+        var user = db.Users.FirstOrDefault(u => u.ID == userId);
+
+        if (user == null || user.Token != token) // Verify the token matches the user's current token
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(new { error = "Invalid token" });
+            return;
+        }
+
+        var bodyString = await new StreamReader(context.Request.Body).ReadToEndAsync();
+        var updateUserRequest = JsonSerializer.Deserialize<User>(bodyString);
+
+        if (updateUserRequest == null || string.IsNullOrEmpty(updateUserRequest.Email) || string.IsNullOrEmpty(updateUserRequest.Password))
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsJsonAsync(new { error = "Invalid user data" });
+            return;
+        }
+
+        user.Email = updateUserRequest.Email;
+        user.Password = HashPassword(updateUserRequest.Password);
+        await SaveDatabaseAsync(db);
+
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        await context.Response.WriteAsJsonAsync(new { id = user.ID, email = user.Email });
+    }
+    catch (SecurityTokenException)
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        await context.Response.WriteAsJsonAsync(new { error = "Invalid token" });
+    }
+    catch (Exception ex)
+    {
+       // context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong", details = ex.Message });
     }
 }
 
@@ -315,30 +443,26 @@ async Task HandlerUsersCreate(HttpContext context)
         var bodyString = await new StreamReader(context.Request.Body).ReadToEndAsync();
         Console.WriteLine("Raw Body: " + bodyString);
 
-        var userRequest = System.Text.Json.JsonSerializer.Deserialize<UserRequest>(bodyString);
+        var newUser = System.Text.Json.JsonSerializer.Deserialize<User>(bodyString);
+        Console.WriteLine("Deserialized User: " + (newUser != null ? $"Email: {newUser.Email}, Password: {newUser.Password}" : "null"));
 
-        if (userRequest == null || string.IsNullOrEmpty(userRequest.Email) || string.IsNullOrEmpty(userRequest.Password))
+        if (newUser == null || string.IsNullOrEmpty(newUser.Email) || string.IsNullOrEmpty(newUser.Password))
         {
-            Console.WriteLine("User request is invalid");
+            Console.WriteLine("User data is invalid!!!");
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsJsonAsync(new { error = "Invalid user data" });
             return;
         }
 
-        // Hash the password
-        var passwordHash = HashPassword(userRequest.Password);
-
-        var user = await CreateUserAsync(userRequest.Email, passwordHash);
-
-        if (user == null)
-        {
-            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-            await context.Response.WriteAsJsonAsync(new { error = "Couldn't create user" });
-            return;
-        }
+        // Create user and save to the database
+        newUser.Password = HashPassword(newUser.Password);
+        var db = await GetDatabaseAsync();
+        newUser.ID = db.Users.Count + 1;
+        db.Users.Add(newUser);
+        await SaveDatabaseAsync(db);
 
         context.Response.StatusCode = StatusCodes.Status201Created;
-        await context.Response.WriteAsJsonAsync(new { id = user.ID, email = user.Email });
+        await context.Response.WriteAsJsonAsync(new { id = newUser.ID, email = newUser.Email });
     }
     catch (Exception ex)
     {
@@ -348,36 +472,72 @@ async Task HandlerUsersCreate(HttpContext context)
     }
 }
 
-async Task<User?> CreateUserAsync(string email, string passwordHash)
+async Task<List<Chirp>> GetChirpsAsync()
 {
-    var dbData = await GetDatabaseAsync();
-    var users = dbData.Users;
-
-    var newUserId = users.Any() ? users.Max(u => u.ID) + 1 : 1;
-    var newUser = new User { ID = newUserId, Email = email, PasswordHash = passwordHash };
-
-    users.Add(newUser);
-    dbData.Users = users;
-
     try
     {
-        await SaveDatabaseAsync(dbData);
+        var jsonData = await File.ReadAllTextAsync("database.json");
+        return JsonSerializer.Deserialize<Database>(jsonData)?.Chirps ?? new List<Chirp>();
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error saving user: {ex.Message}");
-        return null;
+        Console.WriteLine($"Error reading chirps: {ex.Message}");
+        return new List<Chirp>();
     }
-
-    return newUser;
 }
 
+async Task<Chirp> CreateChirpAsync(string body)
+{
+    var db = await GetDatabaseAsync();
+    var chirp = new Chirp { ID = db.Chirps.Count + 1, Body = body };
+    db.Chirps.Add(chirp);
+    await SaveDatabaseAsync(db);
+    return chirp;
+}
+
+
+string GenerateDefaultSecret()
+{
+    // Generate a default secret key for JWT if not provided
+    var key = new byte[32]; // 256 bits
+    using (var rng = RandomNumberGenerator.Create())
+    {
+        rng.GetBytes(key);
+    }
+    return Convert.ToBase64String(key);
+}
+
+async Task SaveDatabaseAsync(Database db)
+{
+    try
+    {
+        var jsonData = JsonSerializer.Serialize(db, new JsonSerializerOptions { WriteIndented = true });
+        await File.WriteAllTextAsync("database.json", jsonData);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error saving database: {ex.Message}");
+    }
+}
+
+async Task<Database> GetDatabaseAsync()
+{
+    try
+    {
+        var jsonData = await File.ReadAllTextAsync("database.json");
+        return JsonSerializer.Deserialize<Database>(jsonData) ?? new Database();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error reading database: {ex.Message}");
+        return new Database();
+    }
+}
 
 string HashPassword(string password, string? storedHash = null)
 {
     if (storedHash == null)
     {
-        // Hash new password
         var salt = new byte[16];
         using (var rng = RandomNumberGenerator.Create())
         {
@@ -400,7 +560,6 @@ string HashPassword(string password, string? storedHash = null)
     }
     else
     {
-        // Verify password
         var hashBytes = Convert.FromBase64String(storedHash);
         var salt = hashBytes.Take(16).ToArray();
         var storedHashBytes = hashBytes.Skip(16).ToArray();
@@ -417,118 +576,48 @@ string HashPassword(string password, string? storedHash = null)
     }
 }
 
-
-async Task<Database> GetDatabaseAsync()
+public class LoginRequest
 {
-    var dbData = new Database();
+    [JsonPropertyName("email")]
+    public string Email { get; set; }
 
-    try
-    {
-        var jsonData = await File.ReadAllTextAsync("database.json");
-        dbData = System.Text.Json.JsonSerializer.Deserialize<Database>(jsonData) ?? new Database();
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error reading database: {ex.Message}");
-    }
+    [JsonPropertyName("password")]
+    public string Password { get; set; }
 
-    return dbData;
+    public int? ExpiresInSeconds { get; set; } = 0;
 }
 
-async Task SaveDatabaseAsync(Database dbData)
+public class User
 {
-    try
-    {
-        var jsonData = System.Text.Json.JsonSerializer.Serialize(dbData);
-        await File.WriteAllTextAsync("database.json", jsonData);
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error saving database: {ex.Message}");
-    }
+    
+    public int ID { get; set; }
+
+    [JsonPropertyName("email")]
+    public string Email { get; set; }
+
+    [JsonPropertyName("password")]
+    public string Password { get; set; }
+    public string? Token { get; set; } // Add this line
 }
 
-async Task<List<Chirp>> GetChirpsAsync()
+public class Chirp
 {
-    var chirps = new List<Chirp>();
-
-    try
-    {
-        var jsonData = await File.ReadAllTextAsync("database.json");
-        chirps = System.Text.Json.JsonSerializer.Deserialize<List<Chirp>>(jsonData) ?? new List<Chirp>();
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error reading chirps: {ex.Message}");
-        return new List<Chirp>(); // Return an empty list instead of null
-    }
-
-    return chirps;
-}
-
-async Task<Chirp?> CreateChirpAsync(string body)
-{
-    var chirps = await GetChirpsAsync();
-    var newChirpId = chirps.Any() ? chirps.Max(c => c.ID) + 1 : 1;
-    var newChirp = new Chirp { ID = newChirpId, Body = body };
-
-    chirps.Add(newChirp);
-
-    try
-    {
-        var jsonData = System.Text.Json.JsonSerializer.Serialize(chirps);
-        await File.WriteAllTextAsync("database.json", jsonData);
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error saving chirp: {ex.Message}");
-        return null; // It's okay to return null if the return type is nullable
-    }
-
-    return newChirp;
-}
-
-class Chirp
-{
-    public int? ID { get; set; }
-    public string? Body { get; set; }
+    public int ID { get; set; }
+    public string Body { get; set; }
 }
 
 public class ChirpRequest
 {
     [JsonPropertyName("body")]
-    public string? Body { get; set; }
+    public string Body { get; set; }
 }
-class Database
+
+public class Database
 {
     public List<Chirp> Chirps { get; set; } = new List<Chirp>();
     public List<User> Users { get; set; } = new List<User>();
+  //  public string? Token { get; set; }
 }
 
 
-
-class User
-{
-    public int? ID { get; set; }
-    public string? Email { get; set; }
-    public string? PasswordHash { get; set; } // Store the hashed password
-}
-
-class LoginRequest
-{
-    [JsonPropertyName("email")]
-    public string? Email { get; set; }
-
-    [JsonPropertyName("password")]
-    public string? Password { get; set; }
-}
-
-class UserRequest
-{
-    [JsonPropertyName("email")]
-    public string? Email { get; set; }
-
-    [JsonPropertyName("password")]
-    public string? Password { get; set; } // Add this property
-}
 

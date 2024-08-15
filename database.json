@@ -1,1 +1,11 @@
-{"Chirps":[],"Users":[{"ID":1,"Email":"saul@bettercall.com","PasswordHash":"saDh9nREabJmtHs02CFZ2KUGDREN/b53VtPZj9u11yfYai0Lc7K0JoXyaxu00MQ4"}]}
+{
+  "Chirps": [],
+  "Users": [
+    {
+      "ID": 1,
+      "email": "mike@bettercall.com",
+      "password": "9XsW19rs32CmZbOGUlrOn6V4W9yxBiV\u002BqNNGQKYRyfF7Cu5HMA187DnMfY55pQwp",
+      "Token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJtaWtlQGJldHRlcmNhbGwuY29tIiwianRpIjoiMjc0ZTJmNDQtOGM0Ni00OWUzLThlOWQtM2U4OTRlOWZjYzU3IiwibmJmIjoxNzIzNjg4MDUyLCJleHAiOjE3MjM3NzQ0NTIsImlhdCI6MTcyMzY4ODA1Mn0.vFmTISGIXMcunfS83QYCgzqhq-w13W3zEpqwWLtoaqc"
+    }
+  ]
+}
