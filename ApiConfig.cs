@@ -9,6 +9,48 @@ public class ApiConfig
     public int FileServerHits { get; set; }
 }
 
+public class LoginRequest
+{
+    [JsonPropertyName("email")]
+    public string Email { get; set; }
+
+    [JsonPropertyName("password")]
+    public string Password { get; set; }
+
+    [JsonPropertyName("expires_in_seconds")]
+    public int? ExpiresInSeconds { get; set; } = 3600;
+}
+
+public class User
+{
+    public int ID { get; set; }
+
+    [JsonPropertyName("email")]
+    public string Email { get; set; }
+
+    [JsonPropertyName("password")]
+    public string Password { get; set; }
+    public string? Token { get; set; } // Add this line
+}
+
+public class Chirp
+{
+    public int ID { get; set; }
+    public string Body { get; set; }
+}
+
+public class ChirpRequest
+{
+    [JsonPropertyName("body")]
+    public string Body { get; set; }
+}
+
+public class Database
+{
+    public List<Chirp> Chirps { get; set; } = new List<Chirp>();
+    public List<User> Users { get; set; } = new List<User>();
+  //  public string? Token { get; set; }
+}
 
 public class TokenService
 {
