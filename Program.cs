@@ -78,10 +78,84 @@ app.MapGet("/api/chirps/{chirpID:int}", HandlerChirpRetrieveById);
 app.MapPost("/api/users", HandlerUsersCreate);
 app.MapPost("/api/login", HandlerLogin);
 app.MapPut("/api/users", HandlerUsersUpdate);
+app.MapDelete("/api/chirps/{chirpID:int}", HandlerChirpsDelete);
 
 app.Run();
 
 
+
+async Task HandlerChirpsDelete(HttpContext context)
+{
+    try
+    {
+        // Ensure the user is authenticated
+        var token = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+        if (string.IsNullOrEmpty(token))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(new { error = "Unauthorized" });
+            return;
+        }
+
+        var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET");
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var key = Encoding.ASCII.GetBytes(jwtSecret);
+        
+        tokenHandler.ValidateToken(token, new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(key),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ClockSkew = TimeSpan.Zero
+        }, out SecurityToken validatedToken);
+
+        var jwtToken = (JwtSecurityToken)validatedToken;
+        var userId = int.Parse(jwtToken.Claims.First(x => x.Type == JwtRegisteredClaimNames.Sub).Value);
+
+        // Extract chirpID from route
+        if (!context.Request.RouteValues.TryGetValue("chirpID", out var chirpIdObj) || 
+            !int.TryParse(chirpIdObj.ToString(), out var chirpID))
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsJsonAsync(new { error = "Invalid chirp ID" });
+            return;
+        }
+
+        // Retrieve and delete the chirp
+        var db = await GetDatabaseAsync();
+        var chirp = db.Chirps.FirstOrDefault(c => c.ID == chirpID);
+
+        if (chirp == null)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            await context.Response.WriteAsJsonAsync(new { error = "Chirp not found" });
+            return;
+        }
+
+        if (chirp.AuthorId != userId)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { error = "You are not authorized to delete this chirp" });
+            return;
+        }
+
+        db.Chirps.Remove(chirp);
+        await SaveDatabaseAsync(db);
+
+        context.Response.StatusCode = StatusCodes.Status204NoContent;
+    }
+    catch (SecurityTokenException)
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        await context.Response.WriteAsJsonAsync(new { error = "Invalid token" });
+    }
+    catch (Exception ex)
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong", details = ex.Message });
+    }
+}
 
 async Task FsHandler(HttpContext context)
 {

@@ -1,1 +1,17 @@
-
+{
+  "Chirps": [],
+  "Users": [
+    {
+      "ID": 1,
+      "email": "walt@breakingbad.com",
+      "password": "\u002Bagu4AV13z5wdW1zt\u002BwPsYWGO4sT1/4lUzXuHw3HStEqrTOH2\u002BAE7ILu0oYHPh3e",
+      "Token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJ3YWx0QGJyZWFraW5nYmFkLmNvbSIsImp0aSI6ImI1NDg2MzFjLWEwNmMtNDQ1Mi04MmQ4LTEzODAxN2VjZTZkNSIsIm5iZiI6MTcyMzkzNzMzMiwiZXhwIjoxNzIzOTQwOTMyLCJpYXQiOjE3MjM5MzczMzJ9.PvNGiUsJIeNJLIUsffX2E-Nu_xd2keDERheg3EvZHe4"
+    },
+    {
+      "ID": 2,
+      "email": "skyler@breakingbad.com",
+      "password": "x2TA0fqJ96TtouZgBSL9Au\u002B/ibCN\u002BAQeeoDi7i1bFrG9KxRgMLCoqEMqjbT6joNb",
+      "Token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZW1haWwiOiJza3lsZXJAYnJlYWtpbmdiYWQuY29tIiwianRpIjoiZmU0ZjcyYzEtYzYxMS00MzY5LTg5OWMtNDdmYzYxY2E3ZmE3IiwibmJmIjoxNzIzOTM3MzMyLCJleHAiOjE3MjM5NDA5MzIsImlhdCI6MTcyMzkzNzMzMn0.TzaqrOe48xo6RU7rPliDFz_kjnlnKdVYpqwW0QUGns4"
+    }
+  ]
+}
