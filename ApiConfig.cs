@@ -37,6 +37,8 @@ public class Chirp
 {
     public int ID { get; set; }
     public string Body { get; set; }
+    public int AuthorId { get; set; }
+
 }
 
 public class ChirpRequest

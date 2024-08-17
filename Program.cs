@@ -240,47 +240,69 @@ async Task HandlerChirpsCreate(HttpContext context)
 {
     try
     {
+        // Ensure the user is authenticated
+        var token = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+        if (string.IsNullOrEmpty(token))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(new { error = "Unauthorized" });
+            return;
+        }
+
+        var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET");
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var key = Encoding.ASCII.GetBytes(jwtSecret);
+        
+        tokenHandler.ValidateToken(token, new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(key),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ClockSkew = TimeSpan.Zero
+        }, out SecurityToken validatedToken);
+
+        var jwtToken = (JwtSecurityToken)validatedToken;
+        var userId = int.Parse(jwtToken.Claims.First(x => x.Type == JwtRegisteredClaimNames.Sub).Value);
+
         // Read the request body
         var bodyString = await new StreamReader(context.Request.Body).ReadToEndAsync();
-        Console.WriteLine("Raw Body: " + bodyString);
-
-        // Deserialize the body string into ChirpRequest
-        var chirpRequest = System.Text.Json.JsonSerializer.Deserialize<ChirpRequest>(bodyString);
+        var chirpRequest = JsonSerializer.Deserialize<ChirpRequest>(bodyString);
 
         if (chirpRequest == null || string.IsNullOrEmpty(chirpRequest.Body))
         {
-            Console.WriteLine("Chirp request is null or body is empty");
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsJsonAsync(new { error = "Invalid chirp data" });
             return;
         }
 
         // Validate the chirp
-        if (chirpRequest?.Body != null)
+        var cleanedBody = ValidateChirp(chirpRequest.Body, out string error);
+        if (error != null)
         {
-            var cleanedBody = ValidateChirp(chirpRequest.Body, out string error);
-
-            if (error != null)
-            {
-                context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error });
-                return;
-            }
-
-            // Create the chirp and save to the database
-            var chirp = await CreateChirpAsync(cleanedBody);
-
-            context.Response.StatusCode = StatusCodes.Status201Created;
-            await context.Response.WriteAsJsonAsync(new { id = chirp.ID, body = chirp.Body });
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsJsonAsync(new { error });
+            return;
         }
+
+        // Create the chirp and save to the database
+        var chirp = await CreateChirpAsync(cleanedBody, userId);
+
+        context.Response.StatusCode = StatusCodes.Status201Created;
+        await context.Response.WriteAsJsonAsync(new { id = chirp.ID, body = chirp.Body, author_id = chirp.AuthorId });
+    }
+    catch (SecurityTokenException)
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        await context.Response.WriteAsJsonAsync(new { error = "Invalid token" });
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Exception: {ex}");
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong" });
+        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong", details = ex.Message });
     }
 }
+
 
 string ValidateChirp(string body, out string error)
 {
@@ -328,17 +350,22 @@ async Task HandlerChirpsRetrieve(HttpContext context)
         // Sort the chirps by ID
         var sortedChirps = dbChirps.OrderBy(c => c.ID).ToList();
 
-        // Respond with the sorted chirps as JSON
+        // Respond with the sorted chirps as JSON, including the author_id
         context.Response.StatusCode = StatusCodes.Status200OK;
-        await context.Response.WriteAsJsonAsync(sortedChirps);
+        await context.Response.WriteAsJsonAsync(sortedChirps.Select(c => new 
+        { 
+            id = c.ID, 
+            body = c.Body, 
+            author_id = c.AuthorId 
+        }));
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Exception: {ex}");
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong" });
+        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong", details = ex.Message });
     }
 }
+
 
 async Task HandlerChirpRetrieveById(HttpContext context)
 {
@@ -489,14 +516,20 @@ async Task<List<Chirp>> GetChirpsAsync()
     }
 }
 
-async Task<Chirp> CreateChirpAsync(string body)
+async Task<Chirp> CreateChirpAsync(string body, int authorId)
 {
     var db = await GetDatabaseAsync();
-    var chirp = new Chirp { ID = db.Chirps.Count + 1, Body = body };
+    var chirp = new Chirp
+    {
+        ID = db.Chirps.Count + 1,
+        Body = body,
+        AuthorId = authorId // Associate chirp with the user's ID
+    };
     db.Chirps.Add(chirp);
     await SaveDatabaseAsync(db);
     return chirp;
 }
+
 
 
 string GenerateDefaultSecret()

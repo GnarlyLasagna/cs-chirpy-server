@@ -1,11 +1,1 @@
-{
-  "Chirps": [],
-  "Users": [
-    {
-      "ID": 1,
-      "email": "mike@bettercall.com",
-      "password": "fFdHSpCl5EYasppsANlt29Ysm9kv3si2JeOzal//R6qeaspGj1F5EgsQoNBSvyBu",
-      "Token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJtaWtlQGJldHRlcmNhbGwuY29tIiwianRpIjoiNmZiNTkyMTUtZDM1NC00NjQ1LWI0YzgtNjQyNWE0NmZhMjIwIiwibmJmIjoxNzIzODI2MDczLCJleHAiOjE3MjM4MjYwNzQsImlhdCI6MTcyMzgyNjA3M30.dx0CdCisyONzhbk3bIwLrrBzpyLDZcX3dAdqJe2LDgE"
-    }
-  ]
-}
+
