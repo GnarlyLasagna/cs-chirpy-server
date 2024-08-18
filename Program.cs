@@ -705,6 +705,15 @@ async Task HandlerPolkaWebhooks(HttpContext context)
 {
     try
     {
+        // Check for the API key in the Authorization header
+        if (!context.Request.Headers.TryGetValue("Authorization", out var authHeader) ||
+            !authHeader.ToString().StartsWith("ApiKey ") ||
+            authHeader.ToString().Substring(7) != Environment.GetEnvironmentVariable("POLKA_API_KEY"))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+
         // Read the request body
         var bodyString = await new StreamReader(context.Request.Body).ReadToEndAsync();
         var webhookRequest = JsonSerializer.Deserialize<WebhookRequest>(bodyString);
@@ -738,7 +747,6 @@ async Task HandlerPolkaWebhooks(HttpContext context)
         await context.Response.WriteAsJsonAsync(new { error = "Something went wrong", details = ex.Message });
     }
 }
-
 
 
 public class WebhookRequest
