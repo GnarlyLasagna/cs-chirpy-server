@@ -74,21 +74,6 @@ public class Database
   //  public string? Token { get; set; }
 }
 
-async Task MetricsHandler(HttpContext context)
-{
-    context.Response.ContentType = "text/html; charset=utf-8";
-
-    var htmlContent = $@"
-    <html>
-    <body>
-        <h1>Welcome, Chirpy Admin</h1>
-        <p>Chirpy has been visited {config.FileServerHits} times!</p>
-    </body>
-    </html>";
-
-    await context.Response.WriteAsync(htmlContent);
-}
-
 public static class DatabaseHelpers
 {
     private const string FilePath = "database.json";

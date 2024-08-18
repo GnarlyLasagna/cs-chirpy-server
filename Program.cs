@@ -72,7 +72,7 @@ app.UseFileServer(new FileServerOptions
 // Route Handlers
 app.MapGet("/app", WebhookHandlers.FsHandler);
 app.MapGet("/app/assets", WebhookHandlers.AssetsHandler);
-app.MapGet("/admin/metrics", Metrics.MetricsHandler);
+app.MapGet("/admin/metrics", MetricsHandler);
 app.MapGet("/api/reset", ResetHandler);
 app.MapGet("/api/healthz", WebhookHandlers.WriteOkResponse);
 
@@ -89,7 +89,7 @@ app.MapPost("/api/polka/webhooks", WebhookHandlers.HandlerPolkaWebhooks);
 
 app.Run();
 
-async Task MetricsHandler(HttpContext context)
+ async Task MetricsHandler(HttpContext context)
 {
     context.Response.ContentType = "text/html; charset=utf-8";
 
