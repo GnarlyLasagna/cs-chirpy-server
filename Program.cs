@@ -1,27 +1,13 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using System.Security.Claims;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
-using System.Text.Json;
-using System.Security.Cryptography;
-using Microsoft.AspNetCore.Cryptography.KeyDerivation;
-using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
 using Handlers;
 
 var ChirpsHandlers = new ChirpsHandlers();
 var UsersHandlers = new UsersHandlers();
 var LoginHandlers = new LoginHandlers();
-var WebhookHandlers = new WebhookHandlers();
+var SingleUseHandlers = new SingleUseHandlers();
 var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? string.Empty;
 var tokenHandler = new JwtSecurityTokenHandler();
 var key = Encoding.ASCII.GetBytes(jwtSecret);
@@ -70,11 +56,14 @@ app.UseFileServer(new FileServerOptions
 });
 
 // Route Handlers
-app.MapGet("/app", WebhookHandlers.FsHandler);
-app.MapGet("/app/assets", WebhookHandlers.AssetsHandler);
-app.MapGet("/admin/metrics", MetricsHandler);
-app.MapGet("/api/reset", ResetHandler);
-app.MapGet("/api/healthz", WebhookHandlers.WriteOkResponse);
+app.MapGet("/app", SingleUseHandlers.FsHandler);
+app.MapGet("/app/assets", SingleUseHandlers.AssetsHandler);
+app.MapGet("/admin/metrics", context => SingleUseHandlers.MetricsHandler(context, config));
+
+app.MapGet("/api/reset", context => SingleUseHandlers.ResetHandler(context, config));
+app.MapGet("/api/healthz", SingleUseHandlers.WriteOkResponse);
+
+app.MapPost("/api/polka/webhooks", SingleUseHandlers.HandlerPolkaWebhooks);
 
 app.MapPost("/api/chirps", ChirpsHandlers.HandlerChirpsCreate);
 app.MapGet("/api/chirps", ChirpsHandlers.HandlerChirpsRetrieve);
@@ -85,28 +74,4 @@ app.MapPost("/api/login", LoginHandlers.HandlerLogin);
 app.MapPut("/api/users", UsersHandlers.HandlerUsersUpdate);
 app.MapDelete("/api/chirps/{chirpID:int}", ChirpsHandlers.HandlerChirpsDelete);
 
-app.MapPost("/api/polka/webhooks", WebhookHandlers.HandlerPolkaWebhooks);
-
 app.Run();
-
- async Task MetricsHandler(HttpContext context)
-{
-    context.Response.ContentType = "text/html; charset=utf-8";
-
-    var htmlContent = $@"
-    <html>
-    <body>
-        <h1>Welcome, Chirpy Admin</h1>
-        <p>Chirpy has been visited {config.FileServerHits} times!</p>
-    </body>
-    </html>";
-
-    await context.Response.WriteAsync(htmlContent);
-}
-
-async Task ResetHandler(HttpContext context)
-{
-    config.FileServerHits = 0;
-    context.Response.StatusCode = StatusCodes.Status200OK;
-    await context.Response.WriteAsync("File server hits counter reset.");
-}

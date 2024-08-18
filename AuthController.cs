@@ -1,9 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authorization;
-using System;
-using System.Linq;
-using System.Text;
-using Microsoft.IdentityModel.Tokens;
 
 namespace Chirpy
 {

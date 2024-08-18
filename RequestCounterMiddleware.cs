@@ -14,8 +14,8 @@ public class RequestCounterMiddleware
         // Increment the counter
         if (!context.Request.Path.StartsWithSegments("/admin/metrics"))
         {
-        _config.FileServerHits++;
-        Console.WriteLine($"Request Count: {_config.FileServerHits}"); // Add this line for debugging
+            _config.FileServerHits++;
+            Console.WriteLine($"Request Count: {_config.FileServerHits}"); // Add this line for debugging
         }
         await _next(context);
     }
