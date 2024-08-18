@@ -30,7 +30,9 @@ public class User
 
     [JsonPropertyName("password")]
     public string Password { get; set; }
-    public string? Token { get; set; } // Add this line
+    public string? Token { get; set; }
+
+    public bool IsChirpyRed { get; set; } = false;
 }
 
 public class Chirp
@@ -38,7 +40,6 @@ public class Chirp
     public int ID { get; set; }
     public string Body { get; set; }
     public int AuthorId { get; set; }
-
 }
 
 public class ChirpRequest

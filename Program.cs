@@ -80,6 +80,8 @@ app.MapPost("/api/login", HandlerLogin);
 app.MapPut("/api/users", HandlerUsersUpdate);
 app.MapDelete("/api/chirps/{chirpID:int}", HandlerChirpsDelete);
 
+app.MapPost("/api/polka/webhooks", HandlerPolkaWebhooks);
+
 app.Run();
 
 
@@ -286,7 +288,13 @@ async Task HandlerLogin(HttpContext context)
         }
 
         context.Response.StatusCode = StatusCodes.Status200OK;
-        await context.Response.WriteAsJsonAsync(new { id = user.ID, email = user.Email, token = tokenString });
+        await context.Response.WriteAsJsonAsync(new 
+        { 
+            id = user.ID, 
+            email = user.Email, 
+            token = tokenString,
+            is_chirpy_red = user.IsChirpyRed // Include the new field in the response
+        });
     }
     catch (Exception ex)
     {
@@ -294,6 +302,7 @@ async Task HandlerLogin(HttpContext context)
         await context.Response.WriteAsJsonAsync(new { error = "Something went wrong", details = ex.Message });
     }
 }
+
 
 async Task<User?> AuthenticateUserAsync(string email, string password)
 {
@@ -566,7 +575,12 @@ async Task HandlerUsersCreate(HttpContext context)
         await SaveDatabaseAsync(db);
 
         context.Response.StatusCode = StatusCodes.Status201Created;
-        await context.Response.WriteAsJsonAsync(new { id = newUser.ID, email = newUser.Email });
+        await context.Response.WriteAsJsonAsync(new 
+        { 
+            id = newUser.ID, 
+            email = newUser.Email, 
+            is_chirpy_red = newUser.IsChirpyRed // Include the new field in the response
+        });
     }
     catch (Exception ex)
     {
@@ -575,6 +589,7 @@ async Task HandlerUsersCreate(HttpContext context)
         await context.Response.WriteAsJsonAsync(new { error = "Something went wrong" });
     }
 }
+
 
 async Task<List<Chirp>> GetChirpsAsync()
 {
@@ -686,4 +701,57 @@ string HashPassword(string password, string? storedHash = null)
     }
 }
 
+async Task HandlerPolkaWebhooks(HttpContext context)
+{
+    try
+    {
+        // Read the request body
+        var bodyString = await new StreamReader(context.Request.Body).ReadToEndAsync();
+        var webhookRequest = JsonSerializer.Deserialize<WebhookRequest>(bodyString);
 
+        if (webhookRequest == null || webhookRequest.Event != "user.upgraded")
+        {
+            context.Response.StatusCode = StatusCodes.Status204NoContent;
+            return; // Ignore other events
+        }
+
+        // Process the "user.upgraded" event
+        var userId = webhookRequest.Data.UserId;
+        var db = await GetDatabaseAsync();
+        var user = db.Users.FirstOrDefault(u => u.ID == userId);
+
+        if (user == null)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        user.IsChirpyRed = true; // Mark user as Chirpy Red
+        await SaveDatabaseAsync(db);
+        Console.WriteLine($"user {user}");
+
+        context.Response.StatusCode = StatusCodes.Status204NoContent;
+    }
+    catch (Exception ex)
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new { error = "Something went wrong", details = ex.Message });
+    }
+}
+
+
+
+public class WebhookRequest
+{
+
+    [JsonPropertyName("event")]
+    public string Event { get; set; }
+    [JsonPropertyName("data")]
+    public WebhookData Data { get; set; }
+}
+
+public class WebhookData
+{
+    [JsonPropertyName("user_id")]
+    public int UserId { get; set; }
+}
