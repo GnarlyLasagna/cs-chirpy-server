@@ -3,6 +3,25 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Security.Claims;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Text;
+using System.Text.Json;
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.Cryptography.KeyDerivation;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+
 
 public class ApiConfig
 {
@@ -53,6 +72,99 @@ public class Database
     public List<Chirp> Chirps { get; set; } = new List<Chirp>();
     public List<User> Users { get; set; } = new List<User>();
   //  public string? Token { get; set; }
+}
+
+async Task MetricsHandler(HttpContext context)
+{
+    context.Response.ContentType = "text/html; charset=utf-8";
+
+    var htmlContent = $@"
+    <html>
+    <body>
+        <h1>Welcome, Chirpy Admin</h1>
+        <p>Chirpy has been visited {config.FileServerHits} times!</p>
+    </body>
+    </html>";
+
+    await context.Response.WriteAsync(htmlContent);
+}
+
+public static class DatabaseHelpers
+{
+    private const string FilePath = "database.json";
+
+    public static async Task SaveDatabaseAsync(Database db)
+    {
+        try
+        {
+            var jsonData = JsonSerializer.Serialize(db, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(FilePath, jsonData);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving database: {ex.Message}");
+        }
+    }
+
+    public static async Task<Database> GetDatabaseAsync()
+    {
+        try
+        {
+            if (!File.Exists(FilePath))
+            {
+                return new Database(); // Return a new instance if the file doesn't exist
+            }
+
+            var jsonData = await File.ReadAllTextAsync(FilePath);
+            return JsonSerializer.Deserialize<Database>(jsonData) ?? new Database();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error reading database: {ex.Message}");
+            return new Database();
+        }
+    }
+    public static string HashPassword(string password, string? storedHash = null)
+{
+    if (storedHash == null)
+    {
+        var salt = new byte[16];
+        using (var rng = RandomNumberGenerator.Create())
+        {
+            rng.GetBytes(salt);
+        }
+
+        var hash = KeyDerivation.Pbkdf2(
+            password: password,
+            salt: salt,
+            prf: KeyDerivationPrf.HMACSHA256,
+            iterationCount: 10000,
+            numBytesRequested: 32
+        );
+
+        var hashBytes = new byte[48];
+        Array.Copy(salt, 0, hashBytes, 0, 16);
+        Array.Copy(hash, 0, hashBytes, 16, 32);
+
+        return Convert.ToBase64String(hashBytes);
+    }
+    else
+    {
+        var hashBytes = Convert.FromBase64String(storedHash);
+        var salt = hashBytes.Take(16).ToArray();
+        var storedHashBytes = hashBytes.Skip(16).ToArray();
+
+        var hash = KeyDerivation.Pbkdf2(
+            password: password,
+            salt: salt,
+            prf: KeyDerivationPrf.HMACSHA256,
+            iterationCount: 10000,
+            numBytesRequested: 32
+        );
+
+        return hash.SequenceEqual(storedHashBytes) ? storedHash : null;
+    }
+}
 }
 
 public class TokenService
